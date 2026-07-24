@@ -8,35 +8,64 @@ publish = false
 name = "lore_storage"
 
 [dependencies]
-async-trait = { workspace = true }
-bitflags = { workspace = true }
-blake3 = { workspace = true }
-bytes = { workspace = true }
-crossbeam = { workspace = true }
-dashmap = { workspace = true }
-fastcdc = { workspace = true }
-futures = { workspace = true }
-lore-base = { workspace = true }
-hex = { workspace = true }
-libc = { workspace = true }
-lore-transport = { workspace = true }
-lz4-sys = { workspace = true }
-zstd-sys = { workspace = true }
-memmap2 = { workspace = true }
-opentelemetry = { workspace = true }
-parking_lot = { workspace = true }
-rand = { workspace = true }
-serde = { workspace = true }
-smallvec = { workspace = true }
-thiserror = { workspace = true }
-tokio = { workspace = true }
-tokio-stream = { workspace = true }
-tokio-util = { workspace = true }
-lore-error-set = { workspace = true }
-lore-telemetry = { workspace = true }
-uuid = { workspace = true, features = ["zerocopy"] }
-xxhash-rust = { workspace = true }
-zerocopy = { workspace = true }
+async-trait = "0.1.89"
+
+bitflags = "2.9.4"
+
+blake3 = "1.8.2"
+
+bytes = { version = "1.11.1", features = ["serde"] }
+
+crossbeam = "0.8.4"
+
+dashmap = "6.1.0"
+
+fastcdc = "3.2.1"
+
+futures = "0.3.31"
+
+lore-base = { path = "../lore-base" }
+
+hex = "0.4.3"
+
+libc = "0.2.175"
+
+lore-transport = { path = "../lore-transport" }
+
+lz4-sys = "1.11"
+
+zstd-sys = { version = "2.0", default-features = false, features = ["experimental"] }
+
+memmap2 = "0.9.11"
+
+opentelemetry = "0.31.0"
+
+parking_lot = { version = "0.12.4", features = ["arc_lock"] }
+
+rand = "0.9.2"
+
+serde = { version = "1.0.219", default-features = false, features = ["derive"] }
+
+smallvec = "1.15.1"
+
+thiserror = "2.0.16"
+
+tokio = { version = "1.47.1", features = [ "fs", "io-util", "macros", "net", "parking_lot", "rt", "rt-multi-thread", "signal", "sync", "time", ] }
+
+tokio-stream = { version = "0.1.17", default-features = false, features = ["sync"] }
+
+tokio-util = { version = "0.7.16", default-features = false, features = ["rt"] }
+
+lore-error-set = { path = "../lore-error-set" }
+
+lore-telemetry = { path = "../lore-telemetry" }
+
+uuid = { version = "1.18.1", default-features = false, features = ["v4", "v7"] }
+
+xxhash-rust = { version = "0.8.15", default-features = false, features = ["xxh3"] }
+
+zerocopy = { version = "0.8.26", features = [ "derive", "alloc", "simd", ] }
+
 
 [features]
 default = []
@@ -45,4 +74,5 @@ oodle = []
 trace_log = []
 
 [target.'cfg(target_family = "windows")'.dependencies]
-windows-sys = { workspace = true, features = ["Win32_Storage_FileSystem"] }
+windows-sys = "0.61.0"
+

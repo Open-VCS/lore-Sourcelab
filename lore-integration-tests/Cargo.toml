@@ -5,36 +5,36 @@ edition = "2024"
 publish = false
 
 [dependencies]
-anyhow = { workspace = true }
-async-trait = { workspace = true }
-axum = { workspace = true }
+anyhow = "1.0.103"
+async-trait = "0.1.89"
+axum = "0.8.4"
 aws-sdk-dynamodb = { version = "1.92.0", default-features = false, features = ["rt-tokio"] }
 aws-sdk-s3 = { version = "1.104.0", default-features = false, features = ["rt-tokio"] }
-bytes = { workspace = true }
-rand = { workspace = true }
-reqwest = { workspace = true }
-ring = { workspace = true }
-serde_json = { workspace = true }
+bytes = { version = "1.11.1", features = ["serde"] }
+rand = "0.9.2"
+reqwest = { version = "0.12.23", default-features = false, features = ["rustls-tls", "charset", "http2", "macos-system-configuration"] }
+ring = "0.17.14"
+serde_json = { version = "1.0.143", default-features = false }
 rs-consul = "0.13.0"
-rustls = { workspace = true, optional = true }
+rustls = { version = "0.23.31", default-features = false, features = ["std", "logging", "ring"] }
 serde_dynamo = { version = "4.2.14", features = ["aws-sdk-dynamodb+1"] }
 tempfile = "3.21"
-tokio = { workspace = true }
-tokio-stream = { workspace = true, optional = true }
-tonic = { workspace = true, optional = true }
-tracing = { workspace = true }
-tracing-subscriber = { workspace = true }
-zerocopy = { workspace = true }
-lore = { workspace = true }
-lore-base = { workspace = true }
-lore-storage = { workspace = true }
-lore-aws = { workspace = true }
-lore-revision = { workspace = true }
-lore-hashicorp = { workspace = true }
-lore-proto = { workspace = true }
-lore-server = { workspace = true, features = ["integration_tests"] }
-uuid = { workspace = true }
+tokio = { version = "1.47.1", features = ["fs", "io-util", "macros", "net", "parking_lot", "rt", "rt-multi-thread", "signal", "sync", "time"] }
+tokio-stream = { version = "0.1.17", default-features = false, features = ["sync"], optional = true }
+tonic = { version = "0.14.2", default-features = false, features = ["codegen", "router", "server", "tls-native-roots"], optional = true }
+tracing = { version = "0.1.41", features = ["release_max_level_debug"] }
+tracing-subscriber = { version = "0.3.20", features = ["env-filter", "json"] }
+zerocopy = { version = "0.8.26", features = ["derive", "alloc", "simd"] }
+lore = { path = "../lore" }
+lore-base = { path = "../lore-base" }
+lore-storage = { path = "../lore-storage" }
+lore-aws = { path = "../lore-aws" }
+lore-revision = { path = "../lore-revision" }
+lore-hashicorp = { path = "../lore-hashicorp" }
+lore-proto = { path = "../lore-proto" }
+lore-server = { path = "../lore-server" }
+uuid = { version = "1.18.1", default-features = false, features = ["v4", "v7"] }
 
 [features]
 integration_tests = []
-grpc_integration_tests = ["dep:tokio-stream", "dep:tonic"]
+grpc_integration_tests = ["tokio-stream", "tonic"]

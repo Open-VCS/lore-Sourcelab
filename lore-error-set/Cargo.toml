@@ -10,8 +10,11 @@ default = ["track-locations"]
 track-locations = []
 
 [dependencies]
-lore-error-set-macro = { workspace = true }
+lore-error-set-macro = { path = "../lore-error-set-macro" }
+
 
 [dev-dependencies]
-thiserror = { workspace = true }
-trybuild = { workspace = true }
+thiserror = "2.0.16"
+
+trybuild = "1"
+

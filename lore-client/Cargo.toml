@@ -5,35 +5,54 @@ version.workspace = true
 publish = false
 
 [dependencies]
-anstream = { workspace = true }
-anstyle = { workspace = true }
-chrono = { workspace = true }
-clap = { workspace = true }
-clap-markdown = { workspace = true }
-clap_complete = { version = "4.5.47" }
-libc = { workspace = true }
-parking_lot = { workspace = true }
-serde = { workspace = true }
-serde_json = { workspace = true }
-thiserror = { workspace = true }
-tokio = { workspace = true }
-toml = { workspace = true }
+anstream = "0.6.20"
 
-lore = { workspace = true }
-lore-base = { workspace = true }
-lore-error-set = { workspace = true }
-lore-revision = { workspace = true }
+anstyle = "1.0.11"
+
+chrono = { version = "0.4.42", default-features = false, features = ["alloc", "clock"] }
+
+clap = { version = "4.5.47", features = ["derive", "string", "unicode"] }
+
+clap-markdown = "0.1.5"
+
+clap_complete = { version = "4.5.47" }
+libc = "0.2.175"
+
+parking_lot = { version = "0.12.4", features = ["arc_lock"] }
+
+serde = { version = "1.0.219", default-features = false, features = ["derive"] }
+
+serde_json = { version = "1.0.143", default-features = false }
+
+thiserror = "2.0.16"
+
+tokio = { version = "1.47.1", features = [ "fs", "io-util", "macros", "net", "parking_lot", "rt", "rt-multi-thread", "signal", "sync", "time", ] }
+
+toml = "0.9.5"
+
+
+lore = { path = "../lore" }
+
+lore-base = { path = "../lore-base" }
+
+lore-error-set = { path = "../lore-error-set" }
+
+lore-revision = { path = "../lore-revision" }
+
 
 [target.'cfg(target_family = "windows")'.dependencies]
-windows-sys = { workspace = true, features = ["Win32_System_Console", "Win32_Networking_WinSock", "Win32_Globalization"] }
+windows-sys = "0.61.0"
+
 
 [features]
 default = []
 oodle = ["lore/oodle"]
 
 [build-dependencies]
-vergen = { workspace = true }
-anyhow = { workspace = true }
+vergen = { version = "9.0.6", default-features = false, features = ["cargo", "rustc", "build", "si"] }
+
+anyhow = "1.0.103"
+
 winresource = "0.1.23"
 
 [[bin]]

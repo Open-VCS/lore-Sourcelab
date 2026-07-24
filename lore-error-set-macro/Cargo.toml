@@ -9,6 +9,9 @@ publish = false
 proc-macro = true
 
 [dependencies]
-syn = { workspace = true, features = ["full"] }
-quote = { workspace = true }
-proc-macro2 = { workspace = true }
+syn = "2.0.106"
+
+quote = "1.0.40"
+
+proc-macro2 = "1"
+

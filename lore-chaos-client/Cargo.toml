@@ -5,17 +5,27 @@ version.workspace = true
 publish = false
 
 [dependencies]
-anyhow = { workspace = true }
-serde = { workspace = true, features = ["std"] }
-serde_json = { workspace = true }
-clap = { workspace = true }
-parking_lot = { workspace = true }
-rand = { workspace = true }
+anyhow = "1.0.103"
+
+serde = { version = "1.0.219", default-features = false, features = ["derive"] }
+
+serde_json = { version = "1.0.143", default-features = false }
+
+clap = { version = "4.5.47", features = ["derive", "string", "unicode"] }
+
+parking_lot = { version = "0.12.4", features = ["arc_lock"] }
+
+rand = "0.9.2"
+
 rand_distr = "0.5.1"
-tokio = { workspace = true }
-tracing = { workspace = true }
-tracing-subscriber = { workspace = true }
-lore = { workspace = true }
+tokio = { version = "1.47.1", features = [ "fs", "io-util", "macros", "net", "parking_lot", "rt", "rt-multi-thread", "signal", "sync", "time", ] }
+
+tracing = { version = "0.1.41", features = ["release_max_level_debug"] }
+
+tracing-subscriber = { version = "0.3.20", features = ["env-filter", "json"] }
+
+lore = { path = "../lore" }
+
 
 [[bin]]
 name = "lore_chaos_client"

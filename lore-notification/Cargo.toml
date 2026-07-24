@@ -5,13 +5,23 @@ version.workspace = true
 publish = false
 
 [dependencies]
-async-trait = { workspace = true }
-tonic = { workspace = true }
-tokio = { workspace = true }
-tokio-util = { workspace = true }
-lore-base = { workspace = true }
-lore-storage = { workspace = true }
-lore-revision = { workspace = true }
-lore-transport = { workspace = true }
-lore-error-set = { workspace = true }
-lore-proto = { workspace = true }
+async-trait = "0.1.89"
+
+tonic = { version = "0.14.2", default-features = false, features = ["codegen", "router", "server", "tls-native-roots"] }
+
+tokio = { version = "1.47.1", features = [ "fs", "io-util", "macros", "net", "parking_lot", "rt", "rt-multi-thread", "signal", "sync", "time", ] }
+
+tokio-util = { version = "0.7.16", default-features = false, features = ["rt"] }
+
+lore-base = { path = "../lore-base" }
+
+lore-storage = { path = "../lore-storage" }
+
+lore-revision = { path = "../lore-revision" }
+
+lore-transport = { path = "../lore-transport" }
+
+lore-error-set = { path = "../lore-error-set" }
+
+lore-proto = { path = "../lore-proto" }
+

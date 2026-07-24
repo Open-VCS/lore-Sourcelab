@@ -9,5 +9,7 @@ name = "lore_macro"
 proc-macro = true
 
 [dependencies]
-syn = { workspace = true, features = ["full"] }
-quote = { workspace = true }
+syn = "2.0.106"
+
+quote = "1.0.40"
+

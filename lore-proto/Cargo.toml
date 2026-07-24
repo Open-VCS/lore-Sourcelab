@@ -6,11 +6,17 @@ edition = "2024"
 publish = false
 
 [dependencies]
-lore-base = { workspace = true }
-prost = { workspace = true }
-prost-types = { workspace = true }
-tonic = { workspace = true }
-tonic-prost = { workspace = true }
+lore-base = { path = "../lore-base" }
+
+prost = "0.14.1"
+
+prost-types = "0.14.1"
+
+tonic = { version = "0.14.2", default-features = false, features = ["codegen", "router", "server", "tls-native-roots"] }
+
+tonic-prost = "0.14.2"
+
 
 [build-dependencies]
-tonic-prost-build = { workspace = true }
+tonic-prost-build = "0.14.2"
+
