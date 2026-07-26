@@ -1,8 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Epic Games, Inc.
 // SPDX-License-Identifier: MIT
 use std::collections::HashMap;
-use std::future::Future;
 use std::fmt;
+use std::future::Future;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -26,12 +26,12 @@ use lore_storage::MutableStore;
 use lore_telemetry::grpc_tower_layer::GrpcMetricsLayer;
 use lore_telemetry::user_agent_filter::UserAgentFilter;
 use serde::Deserialize;
+use tonic::body::Body;
 use tonic::transport::Identity;
 use tonic::transport::ServerTlsConfig;
-use tonic::body::Body;
 use tonic::transport::server::Server;
-use tower::ServiceBuilder;
 use tower::Service;
+use tower::ServiceBuilder;
 use tower::layer::util::Stack;
 use tower_http::classify::GrpcCode;
 use tower_http::classify::GrpcErrorsAsFailures;
@@ -512,7 +512,7 @@ impl GrpcServerBuilder<MaybeJwtVerifier> {
         lock_service
     }
 
-    // 
+    //
 
     fn create_services(&self) -> ServiceInstances {
         let storage_svc = LoreStorageService::new(
@@ -599,13 +599,18 @@ impl GrpcServerBuilder<MaybeJwtVerifier> {
         }
     }
 
-    fn build_router<I>(&self, services: ServiceInstances, interceptor: Option<I>, jwt_verifier: Option<JwtVerifier>) -> Result<GrpcRouter>
+    fn build_router<I>(
+        &self,
+        services: ServiceInstances,
+        interceptor: Option<I>,
+        jwt_verifier: Option<JwtVerifier>,
+    ) -> Result<GrpcRouter>
     where
         I: tonic::service::Interceptor + Clone + Send + Sync + 'static,
     {
         let rpc_timeout = self.0.request_handler_timeout;
-        let metrics_layer =
-            tower::ServiceBuilder::new().layer(GrpcMetricsLayer::new(self.0.user_agent_filter.clone()));
+        let metrics_layer = tower::ServiceBuilder::new()
+            .layer(GrpcMetricsLayer::new(self.0.user_agent_filter.clone()));
         let mut server = Server::builder()
             .http2_keepalive_interval(self.0.http2_keep_alive_interval)
             .http2_keepalive_timeout(self.0.http2_keep_alive_timeout);
@@ -716,9 +721,7 @@ impl GrpcServerBuilder<MaybeJwtVerifier> {
                 .add_service(thin_client_v1_server::ThinClientServiceServer::new(
                     thin_client_v1_svc,
                 ))
-                .add_service(RepositoryServiceServer::new(
-                    repository_svc,
-                ))
+                .add_service(RepositoryServiceServer::new(repository_svc))
                 .add_service(repository_v1_server::RepositoryServiceServer::new(
                     repository_v1_svc,
                 ))
@@ -732,9 +735,8 @@ impl GrpcServerBuilder<MaybeJwtVerifier> {
             }
             if let Some(ref notification_service) = self.0.notification_service {
                 router = router.add_service(lore_notification::NotificationServiceServer::new(
-                        notification_service.clone(),
-                    ),
-                );
+                    notification_service.clone(),
+                ));
             }
         }
 
@@ -747,14 +749,13 @@ impl GrpcServerBuilder<MaybeJwtVerifier> {
     ) -> Result<GrpcServerBuilder<WantsAddress>> {
         let services = self.create_services();
 
-        let interceptor = jwt_verifier.as_ref().map(|jwt_verifier| {
-            JWTInterceptor::new(jwt_verifier) as JWTInterceptor
-        });
+        let interceptor = jwt_verifier
+            .as_ref()
+            .map(|jwt_verifier| JWTInterceptor::new(jwt_verifier) as JWTInterceptor);
 
         let router = self.build_router(services, interceptor, jwt_verifier.clone())?;
         Ok(GrpcServerBuilder(WantsAddress { router }))
     }
-
 
     /// Like `with_jwt_verifier` but also applies a Tower layer as the outermost
     /// wrapper (closest to the network), and serves directly.
@@ -770,18 +771,17 @@ impl GrpcServerBuilder<MaybeJwtVerifier> {
     ) -> Result<()>
     where
         L: Clone + Send + Sync + 'static + tower::Layer<tonic::service::Routes>,
-        L::Service: Service<http::Request<Body>, Response = http::Response<Body>>
-            + Clone + Send + 'static,
+        L::Service:
+            Service<http::Request<Body>, Response = http::Response<Body>> + Clone + Send + 'static,
         <L::Service as Service<http::Request<Body>>>::Future: Send + 'static,
-        <L::Service as Service<http::Request<Body>>>::Error: std::error::Error
-            + Send + Sync + 'static,
+        <L::Service as Service<http::Request<Body>>>::Error:
+            std::error::Error + Send + Sync + 'static,
         Fut: Future<Output = ()>,
-
     {
         let services = self.create_services();
         let rpc_timeout = self.0.request_handler_timeout;
-        let metrics_layer =
-            tower::ServiceBuilder::new().layer(GrpcMetricsLayer::new(self.0.user_agent_filter.clone()));
+        let metrics_layer = tower::ServiceBuilder::new()
+            .layer(GrpcMetricsLayer::new(self.0.user_agent_filter.clone()));
         let mut builder = Server::builder()
             .http2_keepalive_interval(self.0.http2_keep_alive_interval)
             .http2_keepalive_timeout(self.0.http2_keep_alive_timeout);
@@ -848,16 +848,14 @@ impl GrpcServerBuilder<MaybeJwtVerifier> {
             router = router.add_service(lock_service);
         }
         if let Some(ref notification_service) = self.0.notification_service {
-            router = router.add_service(
-                lore_notification::NotificationServiceServer::new(
-                    notification_service.clone(),
-                ),
-            );
+            router = router.add_service(lore_notification::NotificationServiceServer::new(
+                notification_service.clone(),
+            ));
         }
 
         router.serve_with_shutdown(addr, signal).await?;
         Ok(())
-}
+    }
 }
 
 pub struct WantsAddress {
@@ -876,7 +874,6 @@ impl GrpcServerBuilder<WantsAddress> {
         self.0.router
     }
 }
-
 
 /// Serves a minimal gRPC server with only the environment endpoint in maintenance mode.
 /// The environment endpoint returns UNAVAILABLE status to signal that the server is in
@@ -919,4 +916,3 @@ pub async fn serve_maintenance(
 
     Ok(())
 }
-
