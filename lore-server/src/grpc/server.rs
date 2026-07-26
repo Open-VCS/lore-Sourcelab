@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 use std::collections::HashMap;
 use std::future::Future;
+use std::fmt;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -27,8 +28,10 @@ use lore_telemetry::user_agent_filter::UserAgentFilter;
 use serde::Deserialize;
 use tonic::transport::Identity;
 use tonic::transport::ServerTlsConfig;
+use tonic::body::Body;
 use tonic::transport::server::Server;
 use tower::ServiceBuilder;
+use tower::Service;
 use tower::layer::util::Stack;
 use tower_http::classify::GrpcCode;
 use tower_http::classify::GrpcErrorsAsFailures;
@@ -478,6 +481,19 @@ pub struct MaybeJwtVerifier {
     forwarded_requests: Option<Arc<dyn ForwardedRequests>>,
 }
 
+/// Collector for all the service instances created from builder state.
+struct ServiceInstances {
+    storage_svc: LoreStorageService,
+    revision_svc: LoreRevisionService,
+    revision_v1_svc: LoreRevisionV1Service,
+    thin_client_v1_svc: LoreThinClientV1Service,
+    repository_svc: LoreRepositoryService,
+    repository_v1_svc: LoreRepositoryV1Service,
+    environment_svc: LoreEnvironmentService,
+    environment_v1_svc: LoreEnvironmentV1Service,
+    lock_svc: Option<LoreLockService>,
+}
+
 impl GrpcServerBuilder<MaybeJwtVerifier> {
     fn make_lock_service(
         services_settings: &Option<GrpcPublicServicesSettings>,
@@ -496,10 +512,9 @@ impl GrpcServerBuilder<MaybeJwtVerifier> {
         lock_service
     }
 
-    pub fn with_jwt_verifier(
-        self,
-        jwt_verifier: Option<JwtVerifier>,
-    ) -> Result<GrpcServerBuilder<WantsAddress>> {
+    // 
+
+    fn create_services(&self) -> ServiceInstances {
         let storage_svc = LoreStorageService::new(
             self.0.immutable_store.clone(),
             self.0.local_store.clone(),
@@ -557,11 +572,10 @@ impl GrpcServerBuilder<MaybeJwtVerifier> {
             self.0.hook_dispatcher.clone(),
             rpc_timeout,
         );
-
         let environment_svc = LoreEnvironmentService::new(self.0.environment.clone());
-        let environment_v1_svc = LoreEnvironmentV1Service::new(self.0.environment);
+        let environment_v1_svc = LoreEnvironmentV1Service::new(self.0.environment.clone());
         let lock_svc = match self.0.lock_store {
-            Some(lock_store) => {
+            Some(ref lock_store) => {
                 info!("Enabling LockService");
                 Some(LoreLockService::new(
                     lock_store.clone(),
@@ -571,17 +585,36 @@ impl GrpcServerBuilder<MaybeJwtVerifier> {
             }
             None => None,
         };
+
+        ServiceInstances {
+            storage_svc,
+            revision_svc,
+            revision_v1_svc,
+            thin_client_v1_svc,
+            repository_svc,
+            repository_v1_svc,
+            environment_svc,
+            environment_v1_svc,
+            lock_svc,
+        }
+    }
+
+    fn build_router<I>(&self, services: ServiceInstances, interceptor: Option<I>, jwt_verifier: Option<JwtVerifier>) -> Result<GrpcRouter>
+    where
+        I: tonic::service::Interceptor + Clone + Send + Sync + 'static,
+    {
+        let rpc_timeout = self.0.request_handler_timeout;
         let metrics_layer =
-            tower::ServiceBuilder::new().layer(GrpcMetricsLayer::new(self.0.user_agent_filter));
+            tower::ServiceBuilder::new().layer(GrpcMetricsLayer::new(self.0.user_agent_filter.clone()));
         let mut server = Server::builder()
             .http2_keepalive_interval(self.0.http2_keep_alive_interval)
             .http2_keepalive_timeout(self.0.http2_keep_alive_timeout);
-        if let Some(tls_config) = self.0.tls_config {
-            server = server.tls_config(tls_config)?;
+        if let Some(ref tls_config) = self.0.tls_config {
+            server = server.tls_config(tls_config.clone())?;
         }
 
-        let mut admin_svc = self.0.admin_svc;
-        admin_svc.set_jwt_verifier(jwt_verifier.clone());
+        let mut admin_svc = self.0.admin_svc.clone();
+        admin_svc.set_jwt_verifier(jwt_verifier);
         admin_svc.set_rpc_timeout(rpc_timeout);
         let trace_layer_config = {
             let mut config = TraceLayerConfig::default();
@@ -600,44 +633,52 @@ impl GrpcServerBuilder<MaybeJwtVerifier> {
 
         let mut router = router.add_service(AdminServiceServer::new(admin_svc));
 
-        if let Some(jwt_verifier) = jwt_verifier.as_ref() {
-            let jwt_interceptor = JWTInterceptor::new(jwt_verifier);
-            // TODO(UCS-13506): Placeholder authn verifier until separate authz flow for repository service is in place
-            let jwt_authn_interceptor = JWTAuthnInterceptor::new(jwt_verifier);
+        let ServiceInstances {
+            storage_svc,
+            revision_svc,
+            revision_v1_svc,
+            thin_client_v1_svc,
+            repository_svc,
+            repository_v1_svc,
+            environment_svc,
+            environment_v1_svc,
+            lock_svc,
+        } = services;
+
+        if let Some(ref interceptor) = interceptor {
             router = router
                 .add_service(StorageServiceServer::with_interceptor(
                     storage_svc.clone(),
-                    jwt_interceptor.clone(),
+                    interceptor.clone(),
                 ))
                 .add_service(
                     storage_service_v1_server::StorageServiceServer::with_interceptor(
                         storage_svc,
-                        jwt_interceptor.clone(),
+                        interceptor.clone(),
                     ),
                 )
                 .add_service(RevisionServiceServer::with_interceptor(
                     revision_svc,
-                    jwt_interceptor.clone(),
+                    interceptor.clone(),
                 ))
                 .add_service(revision_v1_server::RevisionServiceServer::with_interceptor(
                     revision_v1_svc,
-                    jwt_interceptor.clone(),
+                    interceptor.clone(),
                 ))
                 .add_service(
                     thin_client_v1_server::ThinClientServiceServer::with_interceptor(
                         thin_client_v1_svc,
-                        jwt_interceptor.clone(),
+                        interceptor.clone(),
                     ),
                 )
                 .add_service(RepositoryServiceServer::with_interceptor(
-                    repository_svc,
-                    // TODO(UCS-13506): Placeholder authn verifier until separate authz flow for repository service is in place
-                    jwt_authn_interceptor.clone(),
+                    repository_svc.clone(),
+                    interceptor.clone(),
                 ))
                 .add_service(
                     repository_v1_server::RepositoryServiceServer::with_interceptor(
                         repository_v1_svc,
-                        jwt_authn_interceptor.clone(),
+                        interceptor.clone(),
                     ),
                 )
                 .add_service(EnvironmentServiceServer::new(environment_svc))
@@ -645,22 +686,20 @@ impl GrpcServerBuilder<MaybeJwtVerifier> {
                     environment_v1_svc,
                 ));
 
-            // Locks require auth, so set that up here
             if let Some(lock_svc) = lock_svc {
                 let lock_service = Self::make_lock_service(&self.0.service_settings, lock_svc);
                 let intercepted_service = tonic::service::interceptor::InterceptedService::new(
                     lock_service,
-                    jwt_interceptor.clone(),
+                    interceptor.clone(),
                 );
                 router = router.add_service(intercepted_service);
             }
 
-            // Notifications require auth
-            if let Some(notification_service) = self.0.notification_service {
+            if let Some(ref notification_service) = self.0.notification_service {
                 router = router.add_service(
                     lore_notification::NotificationServiceServer::with_interceptor(
-                        notification_service,
-                        jwt_interceptor.clone(),
+                        notification_service.clone(),
+                        interceptor.clone(),
                     ),
                 );
             }
@@ -677,7 +716,9 @@ impl GrpcServerBuilder<MaybeJwtVerifier> {
                 .add_service(thin_client_v1_server::ThinClientServiceServer::new(
                     thin_client_v1_svc,
                 ))
-                .add_service(RepositoryServiceServer::new(repository_svc))
+                .add_service(RepositoryServiceServer::new(
+                    repository_svc,
+                ))
                 .add_service(repository_v1_server::RepositoryServiceServer::new(
                     repository_v1_svc,
                 ))
@@ -689,14 +730,134 @@ impl GrpcServerBuilder<MaybeJwtVerifier> {
                 let lock_service = Self::make_lock_service(&self.0.service_settings, lock_svc);
                 router = router.add_service(lock_service);
             }
-            if let Some(notification_service) = self.0.notification_service {
+            if let Some(ref notification_service) = self.0.notification_service {
                 router = router.add_service(lore_notification::NotificationServiceServer::new(
-                    notification_service,
-                ));
+                        notification_service.clone(),
+                    ),
+                );
             }
         }
+
+        Ok(router)
+    }
+
+    pub fn with_jwt_verifier(
+        self,
+        jwt_verifier: Option<JwtVerifier>,
+    ) -> Result<GrpcServerBuilder<WantsAddress>> {
+        let services = self.create_services();
+
+        let interceptor = jwt_verifier.as_ref().map(|jwt_verifier| {
+            JWTInterceptor::new(jwt_verifier) as JWTInterceptor
+        });
+
+        let router = self.build_router(services, interceptor, jwt_verifier.clone())?;
         Ok(GrpcServerBuilder(WantsAddress { router }))
     }
+
+
+    /// Like `with_jwt_verifier` but also applies a Tower layer as the outermost
+    /// wrapper (closest to the network), and serves directly.
+    ///
+    /// The layer receives every incoming gRPC request as `http::Request<tonic::body::Body>`
+    /// and can inspect the URI path to distinguish read vs write RPCs.
+    pub async fn serve_with_layer<L, Fut>(
+        self,
+        addr: SocketAddr,
+        signal: Fut,
+        jwt_verifier: Option<JwtVerifier>,
+        layer: L,
+    ) -> Result<()>
+    where
+        L: Clone + Send + Sync + 'static + tower::Layer<tonic::service::Routes>,
+        L::Service: Service<http::Request<Body>, Response = http::Response<Body>>
+            + Clone + Send + 'static,
+        <L::Service as Service<http::Request<Body>>>::Future: Send + 'static,
+        <L::Service as Service<http::Request<Body>>>::Error: std::error::Error
+            + Send + Sync + 'static,
+        Fut: Future<Output = ()>,
+
+    {
+        let services = self.create_services();
+        let rpc_timeout = self.0.request_handler_timeout;
+        let metrics_layer =
+            tower::ServiceBuilder::new().layer(GrpcMetricsLayer::new(self.0.user_agent_filter.clone()));
+        let mut builder = Server::builder()
+            .http2_keepalive_interval(self.0.http2_keep_alive_interval)
+            .http2_keepalive_timeout(self.0.http2_keep_alive_timeout);
+        if let Some(ref tls_config) = self.0.tls_config {
+            builder = builder.tls_config(tls_config.clone())?;
+        }
+
+        let mut admin_svc = self.0.admin_svc.clone();
+        admin_svc.set_jwt_verifier(jwt_verifier);
+        admin_svc.set_rpc_timeout(rpc_timeout);
+        let trace_layer_config = {
+            let mut config = TraceLayerConfig::default();
+            config.grpc_codes_as_success.push(GrpcCode::Unauthenticated);
+            config
+        };
+
+        // Apply standard layers + our auth layer + services
+        let mut router = builder
+            .layer(
+                CorrelationIdLayerBuilder::new()
+                    .with_grpc_tracer(trace_layer_config)
+                    .build(),
+            )
+            .layer(LoreTracingLayer {})
+            .layer(metrics_layer)
+            .layer(GrpcResponseTraceLayer {})
+            .layer(layer)
+            .add_service(AdminServiceServer::new(admin_svc));
+
+        let ServiceInstances {
+            storage_svc,
+            revision_svc,
+            revision_v1_svc,
+            thin_client_v1_svc,
+            repository_svc,
+            repository_v1_svc,
+            environment_svc,
+            environment_v1_svc,
+            lock_svc,
+        } = services;
+
+        router = router
+            .add_service(StorageServiceServer::new(storage_svc.clone()))
+            .add_service(storage_service_v1_server::StorageServiceServer::new(
+                storage_svc,
+            ))
+            .add_service(RevisionServiceServer::new(revision_svc))
+            .add_service(revision_v1_server::RevisionServiceServer::new(
+                revision_v1_svc,
+            ))
+            .add_service(thin_client_v1_server::ThinClientServiceServer::new(
+                thin_client_v1_svc,
+            ))
+            .add_service(RepositoryServiceServer::new(repository_svc))
+            .add_service(repository_v1_server::RepositoryServiceServer::new(
+                repository_v1_svc,
+            ))
+            .add_service(EnvironmentServiceServer::new(environment_svc))
+            .add_service(environment_v1_server::EnvironmentServiceServer::new(
+                environment_v1_svc,
+            ));
+        if let Some(lock_svc) = lock_svc {
+            let lock_service = Self::make_lock_service(&self.0.service_settings, lock_svc);
+            router = router.add_service(lock_service);
+        }
+        if let Some(ref notification_service) = self.0.notification_service {
+            router = router.add_service(
+                lore_notification::NotificationServiceServer::new(
+                    notification_service.clone(),
+                ),
+            );
+        }
+
+        router.serve_with_shutdown(addr, signal).await?;
+        Ok(())
+}
 }
 
 pub struct WantsAddress {
@@ -708,7 +869,14 @@ impl GrpcServerBuilder<WantsAddress> {
         self.0.router.serve_with_shutdown(addr, signal).await?;
         Ok(())
     }
+
+    /// Expose the underlying tonic `Router` so callers can apply additional
+    /// Tower layers before serving (e.g., SourceLab auth middleware).
+    pub fn into_router(self) -> GrpcRouter {
+        self.0.router
+    }
 }
+
 
 /// Serves a minimal gRPC server with only the environment endpoint in maintenance mode.
 /// The environment endpoint returns UNAVAILABLE status to signal that the server is in
@@ -751,3 +919,4 @@ pub async fn serve_maintenance(
 
     Ok(())
 }
+

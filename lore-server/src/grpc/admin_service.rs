@@ -25,6 +25,7 @@ use super::timeout_grpc;
 use crate::auth::jwt::JwtVerifier;
 use crate::hooks::HookDispatcher;
 
+#[derive(Clone)]
 pub struct LoreAdminService {
     server_info: ServerInfoResponse,
     immutable_store: Arc<dyn lore_storage::ImmutableStore>,
