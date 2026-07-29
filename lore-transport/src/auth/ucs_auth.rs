@@ -23,7 +23,7 @@ use crate::types::*;
 /// `https://auth.example.com` -> `https://auth.example.com` (unchanged)
 fn grpc_endpoint(auth_url: &str) -> String {
     match auth_url.split_once("://") {
-        Some(("https", _)) => auth_url.to_string(),
+        Some(("https", _)) | Some(("http", _)) => auth_url.to_string(),
         Some((_, rest)) => format!("https://{rest}"),
         None => format!("https://{auth_url}"),
     }
